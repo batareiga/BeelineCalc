@@ -398,66 +398,42 @@ function OfferRow({ o, active, onClick }) {
   );
 }
 
-function ScriptPanel({ tariff, offers, prefs, lang }) {
+function ScriptBlock({ tariff, offers, prefs, lang }) {
   const script = useMemo(()=>buildScript(tariff,offers,prefs,lang),[tariff,offers,prefs,lang]);
   const [copied,setCopied] = useState(false);
 
-  if (!script) return (
-    <div style={{ padding:"32px 20px", textAlign:"center" }}>
-      <div style={{ fontSize:32, marginBottom:10 }}>💬</div>
-      <div style={{ fontSize:13, color:"var(--t2)", lineHeight:1.6 }}>Выберите тариф слева —<br/>здесь появится готовый<br/>скрипт для клиента</div>
-    </div>
-  );
+  if (!script) return null;
 
   const copy = () => {
     const plain = script.replace(/\*\*/g,"");
     navigator.clipboard.writeText(plain).then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2000); });
   };
 
-  // Render markdown-ish bold
   const renderLine = (line, i) => {
     const parts = line.split(/\*\*([^*]+)\*\*/g);
     return (
-      <p key={i} style={{ margin:"0 0 6px", fontSize:12, lineHeight:1.65, color: line.startsWith("•")?"var(--t1)":"var(--t0)" }}>
+      <p key={i} style={{ margin:"0 0 6px", fontSize:11, lineHeight:1.55, color: line.startsWith("•")?"var(--t1)":"var(--t0)" }}>
         {parts.map((p,j)=> j%2===1 ? <strong key={j}>{p}</strong> : p)}
       </p>
     );
   };
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", height:"100%" }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-        <div style={{ fontSize:9, color:"var(--t2)", letterSpacing:1.5, textTransform:"uppercase" }}>Скрипт для клиента</div>
+    <div className="fin" style={{ marginTop:12 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+        <span style={{ fontSize:9, color:"var(--t2)", letterSpacing:1.2, textTransform:"uppercase", fontWeight:600 }}>Скрипт для клиента</span>
         <button onClick={copy} className="btn" style={{
           background: copied?"rgba(52,211,153,.15)":"var(--s2)",
           border:`1px solid ${copied?"rgba(52,211,153,.3)":"var(--b0)"}`,
           color: copied?"#34D399":"var(--t2)",
-          borderRadius:6, padding:"4px 10px", fontSize:10, fontFamily:"inherit",
-          display:"flex", alignItems:"center", gap:5,
+          borderRadius:5, padding:"3px 8px", fontSize:9, fontFamily:"inherit",
+          display:"flex", alignItems:"center", gap:4,
         }}>
-          {copied?"✓ Скопировано":"Скопировать"}
+          {copied?"✓":"📋"} {copied?"Скопировано":"Копировать"}
         </button>
       </div>
-
-      {/* Tariff highlight */}
-      {tariff && (
-        <div style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", background:"var(--s2)", borderRadius:8, marginBottom:12, border:"1px solid var(--b0)" }}>
-          <span style={{ fontSize:20 }}>{tariff.emoji}</span>
-          <div>
-            <div style={{ fontSize:13, fontWeight:700 }}>{tariff.name}</div>
-            <div style={{ fontSize:10, color:"var(--t2)" }}>{getEff(tariff,prefs)}₽/мес · {tariff.tag}</div>
-          </div>
-          <div style={{ marginLeft:"auto", width:8, height:8, borderRadius:"50%", background:tariff.color, boxShadow:`0 0 8px ${tariff.color}` }} />
-        </div>
-      )}
-
-      {/* Script text */}
-      <div style={{ flex:1, overflowY:"auto", background:"var(--s0)", border:"1px solid var(--b0)", borderRadius:8, padding:"14px 14px" }}>
+      <div style={{ background:"var(--s0)", border:"1px solid var(--b0)", borderRadius:8, padding:"10px" }}>
         {script.split("\n").map((line,i) => renderLine(line, i))}
-      </div>
-
-      <div style={{ marginTop:10, fontSize:10, color:"var(--t2)", lineHeight:1.5 }}>
-        Скрипт адаптируется под выбранный язык (выгоды / характеристики) и отмеченные предложения
       </div>
     </div>
   );
@@ -565,7 +541,6 @@ function BeautyNumberModal({ onClose }) {
 export default function App() {
   const [tariffs,setTariffs] = useState(TARIFFS);
   const [lang,setLang] = useState("b");
-  const [tab,setTab] = useState("offers"); // offers | script
   const [rightOpen,setRightOpen] = useState(true);
   const [activeOffers,setActiveOffers] = useState([]);
   const [selectedId,setSelectedId] = useState(null);
@@ -713,6 +688,7 @@ export default function App() {
                     </div>
                   )}
                 </div>
+                <ScriptBlock tariff={selTariff} offers={activeOffers} prefs={prefs} lang={lang} />
               </div>
             )}
           </aside>
@@ -748,48 +724,27 @@ export default function App() {
             </div>
           </main>
 
-          {/* ── RIGHT: Offers + Script ── */}
+          {/* ── RIGHT: Offers ── */}
           {rightOpen && (
             <aside className="sin" style={{
               width:300,flexShrink:0,display:"flex",flexDirection:"column",
               borderLeft:"1px solid var(--b0)",background:"var(--s0)",
             }}>
-              {/* Tab bar */}
-              <div style={{display:"flex",borderBottom:"1px solid var(--b0)",flexShrink:0}}>
-                {[["offers","✦ Предложения"],["script","💬 Скрипт"]].map(([id,label])=>(
-                  <button key={id} onClick={()=>setTab(id)} className="btn" style={{
-                    flex:1,padding:"13px 8px",
-                    background:tab===id?"var(--bg)":"transparent",
-                    borderBottom:`2px solid ${tab===id?"var(--y)":"transparent"}`,
-                    color:tab===id?"var(--t0)":"var(--t2)",
-                    fontSize:11,fontWeight:tab===id?700:400,fontFamily:"inherit",
-                    border:"none",
-                    cursor:"pointer", transition:"all .15s",
-                  }}>{label}
-                  {id==="offers"&&activeOffers.length>0&&(
-                    <span style={{marginLeft:5,background:"#FF5C2E",color:"#fff",borderRadius:99,padding:"1px 5px",fontSize:9,fontWeight:900}}>{activeOffers.length}</span>
-                  )}
-                  </button>
-                ))}
+              <div style={{padding:"14px 14px 0",borderBottom:"1px solid var(--b0)",flexShrink:0}}>
+                <div style={{fontSize:9,color:"var(--t2)",letterSpacing:1.5,textTransform:"uppercase",fontWeight:700}}>Предложения</div>
               </div>
 
               <div style={{flex:1,overflowY:"auto",padding:"16px 14px"}}>
-                {tab==="offers" ? (
-                  <>
-                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      {OFFERS.map(o=>(
-                        <OfferRow key={o.id} o={o} active={activeOffers.includes(o.id)} onClick={()=>toggleOffer(o.id)}/>
-                      ))}
-                    </div>
-                    {activeOffers.length>0&&(
-                      <div className="fin" style={{marginTop:12,padding:"12px",borderRadius:8,background:"rgba(52,211,153,.07)",border:"1px solid rgba(52,211,153,.2)"}}>
-                        <div style={{fontSize:12,fontWeight:700,color:"#34D399",marginBottom:4}}>Отмечено {activeOffers.length} предложений</div>
-                        <div style={{fontSize:11,color:"var(--t2)",lineHeight:1.6}}>Перейди на вкладку «Скрипт» — готовый текст для клиента уже учитывает все отмеченные предложения</div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <ScriptPanel tariff={selTariff} offers={activeOffers} prefs={prefs} lang={lang}/>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {OFFERS.map(o=>(
+                    <OfferRow key={o.id} o={o} active={activeOffers.includes(o.id)} onClick={()=>toggleOffer(o.id)}/>
+                  ))}
+                </div>
+                {activeOffers.length>0&&(
+                  <div className="fin" style={{marginTop:12,padding:"12px",borderRadius:8,background:"rgba(52,211,153,.07)",border:"1px solid rgba(52,211,153,.2)"}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#34D399",marginBottom:4}}>Отмечено {activeOffers.length} предложений</div>
+                    <div style={{fontSize:11,color:"var(--t2)",lineHeight:1.6}}>Скрипт для клиента в блоке «Лучший выбор» уже учитывает все отмеченные предложения</div>
+                  </div>
                 )}
               </div>
             </aside>
