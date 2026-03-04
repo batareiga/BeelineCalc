@@ -237,6 +237,15 @@ input[type=range]::-webkit-slider-thumb:hover { box-shadow:0 0 0 6px rgba(255,22
 .sin   { animation:sin .25s cubic-bezier(.16,1,.3,1) both; }
 .hover-card:hover { border-color:var(--b2) !important; background:var(--s1) !important; }
 strong { font-weight:700; color:var(--t0); }
+
+/* Mobile Responsive */
+@media (max-width: 900px) {
+  .desktop-only { display: none !important; }
+  .mobile-header { display: flex !important; }
+}
+@media (min-width: 901px) {
+  .mobile-header { display: none !important; }
+}
 `;
 
 // ─── SUBCOMPONENTS ───────────────────────────────────────────────────────────
@@ -398,7 +407,7 @@ function OfferRow({ o, active, onClick }) {
   );
 }
 
-function ScriptBlock({ tariff, offers, prefs, lang }) {
+function ScriptBlock({ tariff, offers, prefs, lang, compact }) {
   const script = useMemo(()=>buildScript(tariff,offers,prefs,lang),[tariff,offers,prefs,lang]);
   const [copied,setCopied] = useState(false);
 
@@ -412,7 +421,7 @@ function ScriptBlock({ tariff, offers, prefs, lang }) {
   const renderLine = (line, i) => {
     const parts = line.split(/\*\*([^*]+)\*\*/g);
     return (
-      <p key={i} style={{ margin:"0 0 6px", fontSize:11, lineHeight:1.55, color: line.startsWith("•")?"var(--t1)":"var(--t0)" }}>
+      <p key={i} style={{ margin:"0 0 6px", fontSize: compact?11:12, lineHeight:1.55, color: line.startsWith("•")?"var(--t1)":"var(--t0)" }}>
         {parts.map((p,j)=> j%2===1 ? <strong key={j}>{p}</strong> : p)}
       </p>
     );
@@ -432,11 +441,28 @@ function ScriptBlock({ tariff, offers, prefs, lang }) {
           {copied?"✓":"📋"} {copied?"Скопировано":"Копировать"}
         </button>
       </div>
-      <div style={{ background:"var(--s0)", border:"1px solid var(--b0)", borderRadius:8, padding:"10px" }}>
+      <div style={{ background:"var(--s0)", border:"1px solid var(--b0)", borderRadius:8, padding:"10px", maxHeight: compact?200:"none", overflowY:"auto" }}>
         {script.split("\n").map((line,i) => renderLine(line, i))}
       </div>
     </div>
   );
+}
+
+function OffersScriptPanel({ offers, prefs, lang }) {
+  const dummyTariff = useMemo(() => {
+    if (offers.length === 0) return null;
+    return {
+      id: "custom", name: "Индивидуальное предложение", tag: "Спецпредложение",
+      color: "#FFE300", emoji: "✨", gb: 0, min: 0, sms: false,
+      price: 0, priceFull: 0, pT: 0, disc: 0, badge: null, hasMnp: false,
+      b: { h: "Специально для вас", p: ["Персональные условия", "Выгодные предложения"] },
+      s: { h: "Набор предложений", p: ["Подобрано под ваши задачи", "Учтены все пожелания"] }
+    };
+  }, [offers]);
+
+  if (!dummyTariff) return null;
+
+  return <ScriptBlock tariff={dummyTariff} offers={offers} prefs={prefs} lang={lang} />;
 }
 
 function UploadModal({ onClose, onLoad }) {
@@ -541,6 +567,7 @@ function BeautyNumberModal({ onClose }) {
 export default function App() {
   const [tariffs,setTariffs] = useState(TARIFFS);
   const [lang,setLang] = useState("b");
+  const [tab,setTab] = useState("offers"); // offers | offersScript
   const [rightOpen,setRightOpen] = useState(true);
   const [activeOffers,setActiveOffers] = useState([]);
   const [selectedId,setSelectedId] = useState(null);
@@ -548,6 +575,10 @@ export default function App() {
   const [showUpload,setShowUpload] = useState(false);
   const [showBeautyNum,setShowBeautyNum] = useState(false);
   const [generatedNumbers,setGeneratedNumbers] = useState([]);
+
+  // Mobile state
+  const [mobileView, setMobileView] = useState("calc"); // calc | prefs | script
+  const [leftOpen, setLeftOpen] = useState(false);
 
   const [gb,setGb]=useState(30);   const [min,setMin]=useState(300);
   const [budget,setBudget]=useState(600);
@@ -562,6 +593,23 @@ export default function App() {
 
   useEffect(()=>{ setAnimKey(k=>k+1); setSelectedId(null); },[gb,min,budget,mnp,ai,yandex,cash,combo,kids,tablet]);
 
+  // Автовыбор офферов в зависимости от тарифа
+  useEffect(() => {
+    const autoOffers = [];
+    const tariff = selectedId ? tariffs.find(t=>t.id===selectedId) : ranked[0];
+    if (!tariff) return;
+    
+    if (tariff.hasMnp) autoOffers.push("transfer");
+    if (tariff.isCombo) autoOffers.push("combo");
+    if (tariff.isMax4) autoOffers.push("abonement");
+    if (tariff.id === "planb") autoOffers.push("ai", "novpn");
+    if (tariff.id === "kids") autoOffers.push("kids");
+    if (tariff.id === "plusy") autoOffers.push("film");
+    if (tariff.id === "cashback") autoOffers.push("cash");
+    
+    setActiveOffers(autoOffers);
+  }, [selectedId, ranked, tariffs]);
+
   const selTariff = selectedId ? tariffs.find(t=>t.id===selectedId) : ranked[0];
   const bestEff = selTariff ? getEff(selTariff,prefs) : 0;
   const saved = selTariff ? selTariff.price - bestEff : 0;
@@ -573,8 +621,37 @@ export default function App() {
       <style>{G}</style>
       <div style={{display:"flex",flexDirection:"column",height:"100vh"}}>
 
-        {/* ══ HEADER ══ */}
-        <header style={{
+        {/* ══ MOBILE HEADER ══ */}
+        <header className="mobile-header" style={{
+          height:56, flexShrink:0, display:"none", alignItems:"center",
+          padding:"0 16px", gap:12, borderBottom:"1px solid var(--b0)",
+          background:"var(--bg)",
+        }}>
+          <div style={{display:"flex",alignItems:"center",gap:9,flex:1}}>
+            <div style={{width:32,height:32,background:"var(--y)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:900,color:"#000"}}>🐝</div>
+            <div style={{fontSize:14,fontWeight:700}}>Калькулятор</div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setMobileView("prefs")} className="btn" style={{
+              background:mobileView==="prefs"?"var(--y)":"var(--s1)",
+              color:mobileView==="prefs"?"#000":"var(--t1)",
+              borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,
+            }}>⚙️</button>
+            <button onClick={()=>setMobileView("calc")} className="btn" style={{
+              background:mobileView==="calc"?"var(--y)":"var(--s1)",
+              color:mobileView==="calc"?"#000":"var(--t1)",
+              borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,
+            }}>📊</button>
+            <button onClick={()=>setMobileView("script")} className="btn" style={{
+              background:mobileView==="script"?"var(--y)":"var(--s1)",
+              color:mobileView==="script"?"#000":"var(--t1)",
+              borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,
+            }}>💬</button>
+          </div>
+        </header>
+
+        {/* ══ DESKTOP HEADER ══ */}
+        <header className="desktop-only" style={{
           height:52, flexShrink:0, display:"flex", alignItems:"center",
           padding:"0 20px", gap:12, borderBottom:"1px solid var(--b0)",
           background:"var(--bg)",
@@ -642,8 +719,8 @@ export default function App() {
         {/* ══ BODY ══ */}
         <div style={{flex:1,display:"flex",overflow:"hidden"}}>
 
-          {/* ── LEFT: Prefs ── */}
-          <aside style={{
+          {/* ── LEFT: Prefs (Desktop) / Mobile View ── */}
+          <aside className="desktop-only" style={{
             width:240,flexShrink:0,overflowY:"auto",
             borderRight:"1px solid var(--b0)",padding:"20px 16px",
             background:"var(--bg)",display:"flex",flexDirection:"column",
@@ -688,66 +765,148 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <ScriptBlock tariff={selTariff} offers={activeOffers} prefs={prefs} lang={lang} />
+                <ScriptBlock tariff={selTariff} offers={[]} prefs={{}} lang={lang} compact />
               </div>
             )}
           </aside>
 
-          {/* ── CENTER: Grid ── */}
-          <main style={{flex:1,overflowY:"auto",padding:"20px",background:"var(--bg)"}}>
-            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
-              <span style={{fontSize:10,color:"var(--t2)",letterSpacing:1.2,textTransform:"uppercase",fontWeight:600}}>Подобрано для вас</span>
-              <div style={{flex:1,height:1,background:"var(--b0)"}}/>
-              {mnp&&(
-                <span style={{fontSize:10,color:"var(--y)",background:"rgba(255,227,0,.08)",border:"1px solid rgba(255,227,0,.18)",borderRadius:99,padding:"3px 10px"}}>
-                  🔄 Цены с MNP−{ranked[0]?.disc}%
-                </span>
+          {/* Mobile Prefs View */}
+          {mobileView === "prefs" && (
+            <div className="mobile-header" style={{
+              flex:1, overflowY:"auto", padding:"16px", background:"var(--bg)",
+              display:"none", flexDirection:"column",
+            }}>
+              <Slider label="Интернет" min={1} max={1024} step={1} value={gb} onChange={setGb} format={v=>v>=1000?`${(v/1024).toFixed(0)} ТБ`:`${v} ГБ`} />
+              <Slider label="Звонки" min={0} max={2000} step={50} value={min} onChange={setMin} format={v=>v>=2000?"∞ мин":`${v} мин`} />
+              <Slider label="Бюджет" min={0} max={1300} step={50} value={budget} onChange={setBudget} format={v=>v>=1300?"любой":`${v} ₽`} />
+              <div style={{borderTop:"1px solid var(--b0)",paddingTop:16,marginTop:16}}>
+                <div style={{fontSize:10,color:"var(--t2)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:12,fontWeight:600}}>Профиль</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+                  {[
+                    ["🔄 Перенос номера", mnp, setMnp, "#FFE300"],
+                    ["🤖 Нейронки / AI", ai, setAi, "#818CF8"],
+                    ["🎵 Яндекс Плюс", yandex, setYandex, "#FCD34D"],
+                    ["💰 Кешбэк 9%", cash, setCash, "#C084FC"],
+                    ["⚡ Комбо с домом", combo, setCombo, "#34D399"],
+                    ["🧒 Есть дети", kids, setKids, "#F472B6"],
+                    ["📱 Планшет", tablet, setTablet, "#2DD4BF"],
+                  ].map(([l,v,s,c])=>(
+                    <Chip key={l} label={l} active={v} color={c} onClick={()=>s(!v)}/>
+                  ))}
+                </div>
+              </div>
+              {selTariff && (
+                <div className="fin" style={{marginTop:20,paddingTop:16,borderTop:"1px solid var(--b0)"}}>
+                  <div style={{fontSize:10,color:"var(--t2)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:10,fontWeight:600}}>Лучший выбор</div>
+                  <div style={{borderLeft:`2px solid ${selTariff.color}`,paddingLeft:12}}>
+                    <div style={{fontSize:10,color:selTariff.color,fontWeight:600,marginBottom:2}}>{selTariff.tag}</div>
+                    <div style={{fontSize:20,fontWeight:800,letterSpacing:-.4,marginBottom:8,lineHeight:1.1}}>{selTariff.name}</div>
+                    <div style={{display:"flex",alignItems:"baseline",gap:3}}>
+                      <span style={{fontSize:34,fontWeight:800,letterSpacing:"-1px",fontVariantNumeric:"tabular-nums"}}>{bestEff===0?"0":bestEff}</span>
+                      <span style={{fontSize:13,color:"var(--t2)"}}>₽/мес</span>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
-            <div key={animKey} style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
-              {ranked.map((t,i)=>(
-                <div key={t.id} className="anim" style={{animationDelay:`${i*.04}s`}}>
-                  <TariffCard t={t} lang={lang} prefs={prefs} score={t._s} selected={selectedId===t.id} rank={i}
-                    onClick={()=>setSelectedId(s=>s===t.id?null:t.id)}/>
+          )}
+
+          {/* ── CENTER: Grid ── */}
+          <main style={{flex:1,overflowY:"auto",padding:"20px",background:"var(--bg)",display:"flex",flexDirection:"column"}}>
+            {mobileView !== "prefs" && (
+              <>
+                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+                  <span style={{fontSize:10,color:"var(--t2)",letterSpacing:1.2,textTransform:"uppercase",fontWeight:600}}>Подобрано для вас</span>
+                  <div style={{flex:1,height:1,background:"var(--b0)"}}/>
+                  {mnp&&(
+                    <span style={{fontSize:10,color:"var(--y)",background:"rgba(255,227,0,.08)",border:"1px solid rgba(255,227,0,.18)",borderRadius:99,padding:"3px 10px"}}>
+                      🔄 Цены с MNP−{ranked[0]?.disc}%
+                    </span>
+                  )}
                 </div>
-              ))}
-            </div>
-            <div style={{marginTop:20,fontSize:10,color:"var(--t2)",textAlign:"center",lineHeight:1.7}}>
-              Цены актуальны на дату обновления файла тарифов.&nbsp;
-              <a href="https://spb.beeline.ru/customers/products/toptariffs/" target="_blank" rel="noreferrer"
-                style={{color:"var(--y)",textDecoration:"none",fontWeight:600}}>Проверить актуальность на сайте →</a>
-            </div>
-            <div style={{marginTop:12,fontSize:10,color:"var(--t2)",textAlign:"center",lineHeight:1.7}}>
-              🏠&nbsp;
-              <a href="https://fastnetspb.ru" target="_blank" rel="noreferrer"
-                style={{color:"var(--t0)",textDecoration:"none",fontWeight:600}}>Подключить домашний интернет Fastnet →</a>
+                <div key={animKey} style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
+                  {ranked.map((t,i)=>(
+                    <div key={t.id} className="anim" style={{animationDelay:`${i*.04}s`}}>
+                      <TariffCard t={t} lang={lang} prefs={prefs} score={t._s} selected={selectedId===t.id} rank={i}
+                        onClick={()=>setSelectedId(s=>s===t.id?null:t.id)}/>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <div style={{marginTop:"auto", paddingTop:16, borderTop:"1px solid var(--b0)"}}>
+              <div style={{fontSize:10,color:"var(--t2)",textAlign:"center",lineHeight:1.7,marginBottom:8}}>
+                <a href="https://spb.beeline.ru/customers/products/toptariffs/" target="_blank" rel="noreferrer"
+                  style={{color:"var(--y)",textDecoration:"none",fontWeight:600}}>Проверить актуальность на сайте →</a>
+              </div>
+              <div style={{fontSize:10,color:"var(--t2)",textAlign:"center",lineHeight:1.7}}>
+                <a href="https://fastnetspb.ru" target="_blank" rel="noreferrer"
+                  style={{color:"var(--t0)",textDecoration:"none",fontWeight:600}}>Подключить домашний интернет Fastnet →</a>
+              </div>
             </div>
           </main>
 
-          {/* ── RIGHT: Offers ── */}
+          {/* ── RIGHT: Offers + Script (Desktop) / Mobile Script View ── */}
           {rightOpen && (
-            <aside className="sin" style={{
+            <aside className="desktop-only sin" style={{
               width:300,flexShrink:0,display:"flex",flexDirection:"column",
               borderLeft:"1px solid var(--b0)",background:"var(--s0)",
             }}>
-              <div style={{padding:"14px 14px 0",borderBottom:"1px solid var(--b0)",flexShrink:0}}>
-                <div style={{fontSize:9,color:"var(--t2)",letterSpacing:1.5,textTransform:"uppercase",fontWeight:700}}>Предложения</div>
+              {/* Tab bar */}
+              <div style={{display:"flex",borderBottom:"1px solid var(--b0)",flexShrink:0}}>
+                {[["offers","✦ Предложения"],["offersScript","💬 Скрипт"]].map(([id,label])=>(
+                  <button key={id} onClick={()=>setTab(id)} className="btn" style={{
+                    flex:1,padding:"13px 8px",
+                    background:tab===id?"var(--bg)":"transparent",
+                    borderBottom:`2px solid ${tab===id?"var(--y)":"transparent"}`,
+                    color:tab===id?"var(--t0)":"var(--t2)",
+                    fontSize:11,fontWeight:tab===id?700:400,fontFamily:"inherit",
+                    border:"none",
+                    cursor:"pointer", transition:"all .15s",
+                  }}>{label}
+                  {id==="offers"&&activeOffers.length>0&&(
+                    <span style={{marginLeft:5,background:"#FF5C2E",color:"#fff",borderRadius:99,padding:"1px 5px",fontSize:9,fontWeight:900}}>{activeOffers.length}</span>
+                  )}
+                  </button>
+                ))}
               </div>
 
               <div style={{flex:1,overflowY:"auto",padding:"16px 14px"}}>
-                <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                  {OFFERS.map(o=>(
-                    <OfferRow key={o.id} o={o} active={activeOffers.includes(o.id)} onClick={()=>toggleOffer(o.id)}/>
-                  ))}
-                </div>
-                {activeOffers.length>0&&(
-                  <div className="fin" style={{marginTop:12,padding:"12px",borderRadius:8,background:"rgba(52,211,153,.07)",border:"1px solid rgba(52,211,153,.2)"}}>
-                    <div style={{fontSize:12,fontWeight:700,color:"#34D399",marginBottom:4}}>Отмечено {activeOffers.length} предложений</div>
-                    <div style={{fontSize:11,color:"var(--t2)",lineHeight:1.6}}>Скрипт для клиента в блоке «Лучший выбор» уже учитывает все отмеченные предложения</div>
-                  </div>
+                {tab==="offers" ? (
+                  <>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      {OFFERS.map(o=>(
+                        <OfferRow key={o.id} o={o} active={activeOffers.includes(o.id)} onClick={()=>toggleOffer(o.id)}/>
+                      ))}
+                    </div>
+                    {activeOffers.length>0&&(
+                      <div className="fin" style={{marginTop:12,padding:"12px",borderRadius:8,background:"rgba(52,211,153,.07)",border:"1px solid rgba(52,211,153,.2)"}}>
+                        <div style={{fontSize:12,fontWeight:700,color:"#34D399",marginBottom:4}}>Отмечено {activeOffers.length} предложений</div>
+                        <div style={{fontSize:11,color:"var(--t2)",lineHeight:1.6}}>Перейди на вкладку «Скрипт» — готовый текст для клиента уже учитывает все отмеченные предложения</div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <OffersScriptPanel offers={activeOffers} prefs={prefs} lang={lang} />
                 )}
               </div>
             </aside>
+          )}
+
+          {/* Mobile Script View */}
+          {mobileView === "script" && (
+            <div className="mobile-header" style={{
+              flex:1, overflowY:"auto", padding:"16px", background:"var(--s0)",
+              display:"none", flexDirection:"column",
+            }}>
+              <div style={{fontSize:10,color:"var(--t2)",letterSpacing:1.5,textTransform:"uppercase",marginBottom:12,fontWeight:600}}>Предложения</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
+                {OFFERS.map(o=>(
+                  <OfferRow key={o.id} o={o} active={activeOffers.includes(o.id)} onClick={()=>toggleOffer(o.id)}/>
+                ))}
+              </div>
+              <OffersScriptPanel offers={activeOffers} prefs={prefs} lang={lang} />
+            </div>
           )}
         </div>
       </div>
